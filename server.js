@@ -13,7 +13,7 @@ const { UPLOAD_DIR } = require('./controllers/admin');
 const app = express();
 const port = process.env.API_PORT || 9000;
 
-const origins = (process.env.FRONTEND_URL || 'http://localhost:5173').split(',').map((s) => s.trim());
+const { origins } = require('./config/frontend');
 app.set('trust proxy', 1);
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(cors({ origin: origins, credentials: true }));

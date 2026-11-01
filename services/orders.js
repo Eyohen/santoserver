@@ -119,7 +119,7 @@ async function checkout({ user, customer, shipping, items, discountCode }) {
     return created;
   });
 
-  const callbackUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/order/${orderNumber}`;
+  const callbackUrl = `${require('../config/frontend').primary}/order/${orderNumber}`;
   const tx = await paystack.initializeTransaction({
     email: customer.email,
     amount: priced.total,
