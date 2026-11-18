@@ -4,6 +4,7 @@ const { Op } = require('sequelize');
 const db = require('../models');
 const paystack = require('./paystack');
 const mailer = require('./mailer');
+const { currentPrice } = require('./pricing');
 
 const { sequelize, Order, OrderItem, Payment, ProductVariant, Product, DeliveryFee, Discount } = db;
 
@@ -74,9 +75,9 @@ async function priceCart({ items, state, discountCode }) {
       color: v.color,
       size: v.size,
       image: images[0] || null,
-      unitPrice: v.product.price,
+      unitPrice: currentPrice(v.product),
       quantity: qty,
-      lineTotal: v.product.price * qty,
+      lineTotal: currentPrice(v.product) * qty,
     });
   }
 

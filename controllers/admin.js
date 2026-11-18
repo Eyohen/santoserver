@@ -11,7 +11,7 @@ const { publicOrder } = require('./checkout');
 const { wrap, bad, str, int } = require('../middleware/http');
 
 const {
-  sequelize, Order, OrderItem, Payment, Product, ProductVariant, Category, DeliveryFee, Discount, CustomRequest,
+  sequelize, Order, OrderItem, Payment, Product, ProductVariant, Category, DeliveryFee, Discount, CustomRequest, Announcement,
 } = db;
 
 const slugify = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
@@ -196,16 +196,27 @@ async function categoryId(slug) {
   return c.id;
 }
 
+function readDiscount(b, price) {
+  if (!b.discountType || b.discountValue === '' || b.discountValue == null) return { discountType: null, discountValue: null };
+  if (!['percent', 'amount'].includes(b.discountType)) throw bad('Choose percentage or amount for the discount.', 'discountType');
+  const value = b.discountType === 'percent'
+    ? int(b.discountValue, 'Discount percentage', { min: 1, max: 90 })
+    : int(b.discountValue, 'Discount amount', { min: 1, max: price - 1 });
+  return { discountType: b.discountType, discountValue: value };
+}
+
 function readProduct(b) {
   const name = str(b.name, 'Name', { max: 160 });
+  const price = int(b.price, 'Price', { min: 1 });
   return {
     name,
     slug: str(b.slug, 'Slug', { required: false }) || slugify(name),
     description: str(b.description, 'Description', { max: 4000, required: false }),
     fabrics: str(b.fabrics, 'Fabrics', { required: false }) || null,
     features: str(b.features, 'Features', { required: false }) || null,
-    price: int(b.price, 'Price', { min: 1 }),
+    price,
     compareAtPrice: b.compareAtPrice ? int(b.compareAtPrice, 'Compare-at price', { min: 1 }) : null,
+    ...readDiscount(b, price),
     isNew: Boolean(b.isNew),
     isActive: b.isActive === undefined ? true : Boolean(b.isActive),
     images: Array.isArray(b.images) ? b.images.filter((u) => typeof u === 'string') : [],
@@ -254,7 +265,7 @@ exports.updateProduct = wrap(async (req, res) => {
   const product = await Product.findByPk(req.params.id, { include: productInclude });
   if (!product) return res.status(404).json({ message: 'Product not found.' });
   // Fields left out of the request keep their current value.
-  const data = readProduct({ ...serialize(product), ...req.body });
+  const data = readProduct({ ...serialize(product), price: product.price, compareAtPrice: product.compareAtPrice, ...req.body });
   const clash = await Product.findOne({ where: { slug: data.slug, id: { [Op.ne]: product.id } } });
   if (clash) throw bad('Another product already uses that name.', 'name');
   const variants = req.body.variants ? readVariants({ variants: req.body.variants }, data.slug) : null;
@@ -293,9 +304,39 @@ exports.setStock = wrap(async (req, res) => {
   res.json({ sku: v.sku, stock: v.stock });
 });
 
+const categoryOut = (c, count = 0) => ({ id: c.id, slug: c.slug, name: c.name, sortOrder: c.sortOrder, productCount: count });
+
 exports.listCategories = wrap(async (req, res) => {
-  const rows = await Category.findAll({ order: [['sortOrder', 'ASC']] });
-  res.json({ categories: rows.map((c) => ({ id: c.id, slug: c.slug, name: c.name })) });
+  const rows = await Category.findAll({ order: [['sortOrder', 'ASC'], ['name', 'ASC']] });
+  const counts = await Product.findAll({ attributes: ['categoryId', [fn('COUNT', col('id')), 'n']], group: ['categoryId'], raw: true });
+  const n = new Map(counts.map((r) => [r.categoryId, Number(r.n)]));
+  res.json({ categories: rows.map((c) => categoryOut(c, n.get(c.id) || 0)) });
+});
+
+exports.saveCategory = wrap(async (req, res) => {
+  const name = str(req.body.name, 'Name', { max: 60 });
+  const slug = slugify(name);
+  if (!slug) throw bad('Use letters or numbers in the name.', 'name');
+  const clash = await Category.findOne({ where: { slug, ...(req.params.id && { id: { [Op.ne]: req.params.id } }) } });
+  if (clash) throw bad('A category with that name already exists.', 'name');
+  const sortOrder = int(req.body.sortOrder ?? 0, 'Order', { max: 10000 });
+  let row;
+  if (req.params.id) {
+    row = await Category.findByPk(req.params.id);
+    if (!row) return res.status(404).json({ message: 'Category not found.' });
+    // The slug is kept on rename so existing storefront links and bookmarks keep working.
+    await row.update({ name, sortOrder });
+  } else {
+    row = await Category.create({ name, slug, sortOrder });
+  }
+  res.status(req.params.id ? 200 : 201).json({ category: categoryOut(row) });
+});
+
+exports.deleteCategory = wrap(async (req, res) => {
+  const count = await Product.count({ where: { categoryId: req.params.id } });
+  if (count) throw bad(`This category still has ${count} product${count === 1 ? '' : 's'}. Move or delete them first.`);
+  await Category.destroy({ where: { id: req.params.id } });
+  res.json({ ok: true });
 });
 
 /* ------------------------------- image upload ------------------------------ */
@@ -443,4 +484,37 @@ exports.updateCustomRequest = wrap(async (req, res) => {
   if (req.body.adminNote !== undefined) patch.adminNote = str(req.body.adminNote, 'Note', { max: 1000, required: false }) || null;
   await r.update(patch);
   res.json({ request: r });
+});
+
+const announcementOut = (a) => ({ id: a.id, text: a.text, link: a.link, sortOrder: a.sortOrder, isActive: a.isActive });
+
+exports.listAnnouncements = wrap(async (req, res) => {
+  const rows = await Announcement.findAll({ order: [['sortOrder', 'ASC'], ['createdAt', 'ASC']] });
+  res.json({ announcements: rows.map(announcementOut) });
+});
+
+exports.saveAnnouncement = wrap(async (req, res) => {
+  const b = req.body;
+  const link = str(b.link, 'Link', { max: 300, required: false });
+  if (link && !/^(\/(?!\/)|https?:\/\/)/.test(link)) throw bad('Link must start with / or https://', 'Link');
+  const data = {
+    text: str(b.text, 'Message', { max: 200 }),
+    link: link || null,
+    sortOrder: int(b.sortOrder ?? 0, 'Order', { max: 10000 }),
+    isActive: b.isActive === undefined ? true : Boolean(b.isActive),
+  };
+  let row;
+  if (req.params.id) {
+    row = await Announcement.findByPk(req.params.id);
+    if (!row) return res.status(404).json({ message: 'Announcement not found.' });
+    await row.update(data);
+  } else {
+    row = await Announcement.create(data);
+  }
+  res.status(req.params.id ? 200 : 201).json({ announcement: announcementOut(row) });
+});
+
+exports.deleteAnnouncement = wrap(async (req, res) => {
+  await Announcement.destroy({ where: { id: req.params.id } });
+  res.json({ ok: true });
 });

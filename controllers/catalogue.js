@@ -1,6 +1,7 @@
 'use strict';
-const { Product, ProductVariant, Category, DeliveryFee } = require('../models');
+const { Product, ProductVariant, Category, DeliveryFee, Announcement } = require('../models');
 const { wrap } = require('../middleware/http');
+const { currentPrice } = require('../services/pricing');
 
 const SIZES = ['S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
 
@@ -13,8 +14,13 @@ function serialize(p) {
     id: p.id,
     slug: p.slug,
     name: p.name,
-    price: p.price,
-    compareAtPrice: p.compareAtPrice,
+    price: currentPrice(p),
+    basePrice: p.price,
+    discountType: p.discountType || null,
+    discountValue: p.discountValue || null,
+    listCompareAtPrice: p.compareAtPrice,
+    // When discounted, the original price is what gets struck through.
+    compareAtPrice: currentPrice(p) < p.price ? p.price : p.compareAtPrice,
     category: p.categoryRef?.slug ?? null,
     description: p.description,
     fabrics: p.fabrics,
@@ -70,11 +76,19 @@ exports.getProduct = wrap(async (req, res) => {
 });
 
 exports.listCategories = wrap(async (req, res) => {
-  const rows = await Category.findAll({ order: [['sortOrder', 'ASC']] });
-  res.json({ categories: rows.map((c) => ({ id: c.id, slug: c.slug, name: c.name })) });
+  const rows = await Category.findAll({ order: [['sortOrder', 'ASC'], ['name', 'ASC']] });
+  const products = await Product.findAll({ where: { isActive: true }, order: [['sortOrder', 'ASC'], ['createdAt', 'ASC']] });
+  // A category's tile photo is the cover of its first product.
+  const imageOf = (id) => products.find((p) => p.categoryId === id && p.images?.[0])?.images[0] ?? null;
+  res.json({ categories: rows.map((c) => ({ id: c.id, slug: c.slug, name: c.name, image: imageOf(c.id) })) });
 });
 
 exports.listDeliveryFees = wrap(async (req, res) => {
   const rows = await DeliveryFee.findAll({ where: { isActive: true }, order: [['state', 'ASC']] });
   res.json({ deliveryFees: rows.map((r) => ({ state: r.state, zone: r.zone, fee: r.fee, estimate: r.estimate })) });
+});
+
+exports.listAnnouncements = wrap(async (req, res) => {
+  const rows = await Announcement.findAll({ where: { isActive: true }, order: [['sortOrder', 'ASC'], ['createdAt', 'ASC']] });
+  res.json({ announcements: rows.map((r) => ({ id: r.id, text: r.text, link: r.link })) });
 });

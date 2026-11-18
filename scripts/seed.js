@@ -8,7 +8,7 @@ const path = require('path');
 const crypto = require('crypto');
 const db = require('../models');
 
-const { sequelize, User, Category, Product, ProductVariant, DeliveryFee } = db;
+const { sequelize, User, Category, Product, ProductVariant, DeliveryFee, Announcement } = db;
 
 const ZONES = {
   'South-West': ['Ekiti', 'Lagos', 'Ogun', 'Ondo', 'Osun', 'Oyo'],
@@ -66,6 +66,10 @@ async function loadMock() {
         defaults: { zone, fee: feeFor(state), estimate: zone === 'South-West' ? '2-4 days' : '3-6 days' },
       });
     }
+  }
+
+  if (!(await Announcement.count())) {
+    await Announcement.create({ text: 'Custom and bulk orders from 30 pieces. Request a quote', link: '/custom' });
   }
 
   const email = (process.env.ADMIN_EMAIL || 'admin@santoveste.com').toLowerCase();

@@ -31,6 +31,8 @@ app.use(errorHandler);
 async function start() {
   await db.sequelize.authenticate();
   await db.sequelize.sync(); // creates missing tables; use `npm run seed -- --reset` to rebuild
+  // sync() never alters existing tables, so add the discount columns to a database created before them.
+  await db.sequelize.query('ALTER TABLE "Products" ADD COLUMN IF NOT EXISTS "discountType" VARCHAR(10), ADD COLUMN IF NOT EXISTS "discountValue" INTEGER');
   app.listen(port, () => console.log(`Santo Veste API on http://localhost:${port}/api`));
 }
 
