@@ -24,6 +24,8 @@ router.get('/delivery-fees', catalogue.listDeliveryFees);
 router.get('/announcements', catalogue.listAnnouncements);
 router.post('/discounts/validate', limit(60), pub.validateDiscount);
 router.post('/custom-requests', limit(10), pub.createCustomRequest);
+const designUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024, files: 2 } });
+router.post('/custom-designs', limit(30), designUpload.fields([{ name: 'preview', maxCount: 1 }, { name: 'artwork', maxCount: 1 }]), pub.createDesign);
 
 router.post('/checkout/quote', limit(120), checkout.quote);
 router.post('/checkout', limit(30), optionalAuth, checkout.checkout);

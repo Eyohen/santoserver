@@ -19,7 +19,7 @@ const publicOrder = (o) => ({
   createdAt: o.createdAt,
   items: (o.items || []).map((i) => ({
     sku: i.sku, name: i.productName, slug: i.productSlug, color: i.color, size: i.size,
-    image: i.image, unitPrice: i.unitPrice, quantity: i.quantity, lineTotal: i.lineTotal,
+    image: i.image, artworkUrl: i.artworkUrl, designId: i.designId, unitPrice: i.unitPrice, quantity: i.quantity, lineTotal: i.lineTotal,
   })),
 });
 exports.publicOrder = publicOrder;

@@ -8,6 +8,7 @@ const mailer = require('../services/mailer');
 const orders = require('../services/orders');
 const { serialize, include: productInclude } = require('./catalogue');
 const { publicOrder } = require('./checkout');
+const { saveImage } = require('../services/storage');
 const { wrap, bad, str, int } = require('../middleware/http');
 
 const {
@@ -347,28 +348,7 @@ exports.UPLOAD_DIR = UPLOAD_DIR;
 exports.upload = wrap(async (req, res) => {
   if (!req.file) throw bad('Choose an image to upload.');
   if (!/^image\/(png|jpeg|webp)$/.test(req.file.mimetype)) throw bad('Images must be PNG, JPG or WEBP.');
-
-  if (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET) {
-    const { v2: cloudinary } = require('cloudinary');
-    cloudinary.config({
-      cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-      api_key: process.env.CLOUDINARY_API_KEY,
-      api_secret: process.env.CLOUDINARY_API_SECRET,
-    });
-    const url = await new Promise((resolve, reject) => {
-      cloudinary.uploader
-        .upload_stream({ folder: 'santo-veste' }, (err, r) => (err ? reject(err) : resolve(r.secure_url)))
-        .end(req.file.buffer);
-    });
-    return res.status(201).json({ url });
-  }
-
-  // No Cloudinary configured: keep the file on this server so local development still works.
-  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-  const ext = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' }[req.file.mimetype];
-  const name = `${crypto.randomBytes(8).toString('hex')}.${ext}`;
-  fs.writeFileSync(path.join(UPLOAD_DIR, name), req.file.buffer);
-  res.status(201).json({ url: `${req.protocol}://${req.get('host')}/uploads/${name}` });
+  res.status(201).json({ url: await saveImage(req.file) });
 });
 
 /* ----------------------------- delivery & discounts ----------------------------- */

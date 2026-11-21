@@ -10,6 +10,9 @@ module.exports = (sequelize, DataTypes) => {
     color: DataTypes.STRING,
     size: DataTypes.STRING,
     image: DataTypes.STRING,
+    // Custom t-shirt lines: the id and print-ready artwork of the customer's design.
+    designId: DataTypes.UUID,
+    artworkUrl: DataTypes.STRING(500),
     unitPrice: { type: DataTypes.INTEGER, allowNull: false },
     quantity: { type: DataTypes.INTEGER, allowNull: false },
     lineTotal: { type: DataTypes.INTEGER, allowNull: false },

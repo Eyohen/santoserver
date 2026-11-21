@@ -1,5 +1,7 @@
 'use strict';
-const { CustomRequest } = require('../models');
+const { CustomRequest, CustomDesign } = require('../models');
+const { saveImage } = require('../services/storage');
+const { bad } = require('../middleware/http');
 const orders = require('../services/orders');
 const mailer = require('../services/mailer');
 const { wrap, str, email, phone, int } = require('../middleware/http');
@@ -29,4 +31,17 @@ exports.createCustomRequest = wrap(async (req, res) => {
   mailer.notifyStore(`Custom order request from ${request.name}`,
     `<p>${request.name} (${request.email}, ${request.phone}) wants ${request.quantity} × ${request.product || 'custom pieces'}.</p><p>${request.message || ''}</p>`);
   res.status(201).json({ id: request.id });
+});
+
+const isPng = (f) => f && f.mimetype === 'image/png' && f.buffer.subarray(0, 4).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+
+/** Stores a customer's t-shirt design: the mockup they saw and the transparent print artwork. */
+exports.createDesign = wrap(async (req, res) => {
+  const preview = req.files?.preview?.[0];
+  const artwork = req.files?.artwork?.[0];
+  if (!isPng(preview) || !isPng(artwork)) throw bad('Your design could not be saved. Please try again.');
+  const model = req.body.model === 'woman' ? 'woman' : 'man';
+  const [previewUrl, artworkUrl] = await Promise.all([saveImage(preview), saveImage(artwork)]);
+  const design = await CustomDesign.create({ previewUrl, artworkUrl, model });
+  res.status(201).json({ id: design.id, previewUrl, price: orders.CUSTOM_TSHIRT_PRICE });
 });

@@ -6,7 +6,11 @@ const paystack = require('./paystack');
 const mailer = require('./mailer');
 const { currentPrice } = require('./pricing');
 
-const { sequelize, Order, OrderItem, Payment, ProductVariant, Product, DeliveryFee, Discount } = db;
+// Flat price of a customer-designed t-shirt (naira). Override with CUSTOM_TSHIRT_PRICE.
+const CUSTOM_TSHIRT_PRICE = Number(process.env.CUSTOM_TSHIRT_PRICE) || 5000;
+const CUSTOM_SIZES = ['S', 'M', 'L', 'XL', 'XXL'];
+
+const { sequelize, Order, OrderItem, Payment, ProductVariant, Product, DeliveryFee, Discount, CustomDesign } = db;
 
 const httpError = (status, message, extra) => Object.assign(new Error(message), { status, ...extra });
 
@@ -46,10 +50,19 @@ async function priceCart({ items, state, discountCode }) {
   if (!Array.isArray(items) || items.length === 0) throw httpError(400, 'Your bag is empty.');
 
   const merged = new Map();
+  const customMerged = new Map(); // `${designId}|${size}` -> qty
   for (const it of items) {
     const qty = Number(it.qty);
-    if (!it.sku || !Number.isInteger(qty) || qty < 1 || qty > 50) throw httpError(400, 'Invalid item in your bag.');
-    merged.set(it.sku, (merged.get(it.sku) || 0) + qty);
+    if (!Number.isInteger(qty) || qty < 1 || qty > 50) throw httpError(400, 'Invalid item in your bag.');
+    if (it.designId) {
+      const size = String(it.size || '').toUpperCase();
+      if (!CUSTOM_SIZES.includes(size)) throw httpError(400, 'Choose a size for your custom t-shirt.');
+      const k = `${it.designId}|${size}`;
+      customMerged.set(k, (customMerged.get(k) || 0) + qty);
+    } else {
+      if (!it.sku) throw httpError(400, 'Invalid item in your bag.');
+      merged.set(it.sku, (merged.get(it.sku) || 0) + qty);
+    }
   }
 
   const variants = await ProductVariant.findAll({
@@ -79,6 +92,31 @@ async function priceCart({ items, state, discountCode }) {
       quantity: qty,
       lineTotal: currentPrice(v.product) * qty,
     });
+  }
+
+  if (customMerged.size) {
+    const ids = [...new Set([...customMerged.keys()].map((k) => k.split('|')[0]))];
+    const valid = ids.every((id) => /^[0-9a-f-]{36}$/i.test(id));
+    const designs = valid ? await CustomDesign.findAll({ where: { id: { [Op.in]: ids } } }) : [];
+    const byId = new Map(designs.map((d) => [d.id, d]));
+    for (const [k, qty] of customMerged) {
+      const [id, size] = k.split('|');
+      const d = byId.get(id);
+      if (!d) throw httpError(400, 'A custom design in your bag is no longer available. Please design it again.');
+      lines.push({
+        sku: `CUSTOM-${id.slice(0, 8).toUpperCase()}-${size}`,
+        productName: 'Custom T-shirt',
+        productSlug: null,
+        color: 'Black',
+        size,
+        image: d.previewUrl,
+        designId: d.id,
+        artworkUrl: d.artworkUrl,
+        unitPrice: CUSTOM_TSHIRT_PRICE,
+        quantity: qty,
+        lineTotal: CUSTOM_TSHIRT_PRICE * qty,
+      });
+    }
   }
 
   const fee = await DeliveryFee.findOne({ where: { state, isActive: true } });
@@ -179,6 +217,7 @@ async function finalizePayment(reference, tx) {
     // Deduct stock under row locks so two simultaneous payments can't oversell.
     const shortages = [];
     for (const item of order.items) {
+      if (item.designId) continue; // made to order, no stock to deduct
       const variant = await ProductVariant.findOne({ where: { sku: item.sku }, transaction, lock: transaction.LOCK.UPDATE });
       if (!variant) { shortages.push(`${item.sku} (removed)`); continue; }
       const take = Math.min(variant.stock, item.quantity);
@@ -231,9 +270,10 @@ async function restockOrder(order, transaction) {
   if (!order.stockDeducted) return;
   const items = order.items || await OrderItem.findAll({ where: { orderId: order.id }, transaction });
   for (const item of items) {
+    if (item.designId) continue;
     await ProductVariant.increment('stock', { by: item.quantity, where: { sku: item.sku }, transaction });
   }
   await order.update({ stockDeducted: false }, { transaction });
 }
 
-module.exports = { priceCart, checkout, verifyAndFinalize, finalizePayment, restockOrder, resolveDiscount, discountAmountFor, httpError };
+module.exports = { CUSTOM_TSHIRT_PRICE, priceCart, checkout, verifyAndFinalize, finalizePayment, restockOrder, resolveDiscount, discountAmountFor, httpError };
