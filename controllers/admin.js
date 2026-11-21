@@ -12,7 +12,7 @@ const { saveImage } = require('../services/storage');
 const { wrap, bad, str, int } = require('../middleware/http');
 
 const {
-  sequelize, Order, OrderItem, Payment, Product, ProductVariant, Category, DeliveryFee, Discount, CustomRequest, Announcement,
+  sequelize, Order, OrderItem, Payment, Product, ProductVariant, Category, DeliveryFee, Discount, CustomRequest, Announcement, HeroSlide,
 } = db;
 
 const slugify = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
@@ -496,5 +496,42 @@ exports.saveAnnouncement = wrap(async (req, res) => {
 
 exports.deleteAnnouncement = wrap(async (req, res) => {
   await Announcement.destroy({ where: { id: req.params.id } });
+  res.json({ ok: true });
+});
+
+/* ------------------------------- hero slides ------------------------------- */
+
+const slideOut = (r) => ({ id: r.id, imageUrl: r.imageUrl, alt: r.alt, focusX: r.focusX, focusY: r.focusY, sortOrder: r.sortOrder, isActive: r.isActive });
+
+exports.listHeroSlides = wrap(async (req, res) => {
+  const rows = await HeroSlide.findAll({ order: [['sortOrder', 'ASC'], ['createdAt', 'ASC']] });
+  res.json({ slides: rows.map(slideOut) });
+});
+
+exports.saveHeroSlide = wrap(async (req, res) => {
+  const b = req.body;
+  const imageUrl = str(b.imageUrl, 'Image', { max: 500 });
+  if (!/^(\/(?!\/)|https?:\/\/)/.test(imageUrl)) throw bad('Upload an image for this slide.', 'Image');
+  const data = {
+    imageUrl,
+    alt: str(b.alt, 'Description', { max: 300, required: false }),
+    focusX: int(b.focusX ?? 50, 'Horizontal focus', { max: 100 }),
+    focusY: int(b.focusY ?? 30, 'Vertical focus', { max: 100 }),
+    sortOrder: int(b.sortOrder ?? 0, 'Order', { max: 10000 }),
+    isActive: b.isActive === undefined ? true : Boolean(b.isActive),
+  };
+  let row;
+  if (req.params.id) {
+    row = await HeroSlide.findByPk(req.params.id);
+    if (!row) return res.status(404).json({ message: 'Hero image not found.' });
+    await row.update(data);
+  } else {
+    row = await HeroSlide.create(data);
+  }
+  res.status(req.params.id ? 200 : 201).json({ slide: slideOut(row) });
+});
+
+exports.deleteHeroSlide = wrap(async (req, res) => {
+  await HeroSlide.destroy({ where: { id: req.params.id } });
   res.json({ ok: true });
 });

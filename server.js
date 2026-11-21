@@ -37,6 +37,16 @@ async function start() {
   // Discounts once stored as "naira off" ('amount') are now "discounted price": convert them, or clear any that can't be.
   await db.sequelize.query('UPDATE "Products" SET "discountValue" = "price" - "discountValue", "discountType" = \'price\' WHERE "discountType" = \'amount\' AND "discountValue" > 0 AND "discountValue" < "price"');
   await db.sequelize.query('UPDATE "Products" SET "discountType" = NULL, "discountValue" = NULL WHERE "discountType" = \'amount\'');
+  // First run only: turn the original hero photos into editable slides so the admin can reorder, replace or delete them.
+  if (!(await db.HeroSlide.count())) {
+    await db.HeroSlide.bulkCreate([
+      { imageUrl: '/brand/photo/hero-stairs.webp', focusX: 60, focusY: 40, alt: 'A man in a black corduroy shirt-jacket and cream trousers sits on pale concrete steps under a blue sky' },
+      { imageUrl: '/brand/photo/pair-arch.webp', focusX: 40, focusY: 30, alt: 'A man and a woman in stone-coloured tees stand in front of an arched wall' },
+      { imageUrl: '/brand/photo/man-looking-up.webp', focusX: 50, focusY: 30, alt: 'A man in a stone-coloured jacket and white tee looks up, lit by warm sun against curved concrete' },
+      { imageUrl: '/brand/photo/pink-corduroy.webp', focusX: 50, focusY: 25, alt: 'A man in a pink corduroy jacket and cream trousers looks down at the camera' },
+      { imageUrl: '/brand/photo/woman-black-tee.webp', focusX: 50, focusY: 25, alt: 'A woman in sunglasses and a black tee, lit by warm sun' },
+    ].map((s, i) => ({ ...s, sortOrder: i })));
+  }
   app.listen(port, () => console.log(`Santo Veste API on http://localhost:${port}/api`));
 }
 

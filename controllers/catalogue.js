@@ -1,5 +1,5 @@
 'use strict';
-const { Product, ProductVariant, Category, DeliveryFee, Announcement } = require('../models');
+const { Product, ProductVariant, Category, DeliveryFee, Announcement, HeroSlide } = require('../models');
 const { wrap } = require('../middleware/http');
 const { currentPrice } = require('../services/pricing');
 
@@ -90,4 +90,9 @@ exports.listDeliveryFees = wrap(async (req, res) => {
 exports.listAnnouncements = wrap(async (req, res) => {
   const rows = await Announcement.findAll({ where: { isActive: true }, order: [['sortOrder', 'ASC'], ['createdAt', 'ASC']] });
   res.json({ announcements: rows.map((r) => ({ id: r.id, text: r.text, link: r.link })) });
+});
+
+exports.listHeroSlides = wrap(async (req, res) => {
+  const rows = await HeroSlide.findAll({ where: { isActive: true }, order: [['sortOrder', 'ASC'], ['createdAt', 'ASC']] });
+  res.json({ slides: rows.map((r) => ({ id: r.id, src: r.imageUrl, alt: r.alt, focusX: r.focusX, focusY: r.focusY })) });
 });
