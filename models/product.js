@@ -10,7 +10,7 @@ module.exports = (sequelize, DataTypes) => {
     // Whole naira. Paystack amounts are derived as price * 100 (kobo).
     price: { type: DataTypes.INTEGER, allowNull: false, validate: { min: 0 } },
     compareAtPrice: DataTypes.INTEGER,
-    // Optional discount: 'percent' (value 1-90) or 'amount' (naira off). Customers pay the discounted price.
+    // Optional discount: 'percent' (value 1-90) or 'price' (value is the new discounted price). Customers pay the discounted price.
     discountType: DataTypes.STRING(10),
     discountValue: DataTypes.INTEGER,
     categoryId: { type: DataTypes.UUID, allowNull: false },

@@ -198,10 +198,10 @@ async function categoryId(slug) {
 
 function readDiscount(b, price) {
   if (!b.discountType || b.discountValue === '' || b.discountValue == null) return { discountType: null, discountValue: null };
-  if (!['percent', 'amount'].includes(b.discountType)) throw bad('Choose percentage or amount for the discount.', 'discountType');
+  if (!['percent', 'price'].includes(b.discountType)) throw bad('Choose percentage or discounted price.', 'discountType');
   const value = b.discountType === 'percent'
     ? int(b.discountValue, 'Discount percentage', { min: 1, max: 90 })
-    : int(b.discountValue, 'Discount amount', { min: 1, max: price - 1 });
+    : int(b.discountValue, 'Discounted price', { min: 1, max: price - 1 });
   return { discountType: b.discountType, discountValue: value };
 }
 
@@ -215,7 +215,7 @@ function readProduct(b) {
     fabrics: str(b.fabrics, 'Fabrics', { required: false }) || null,
     features: str(b.features, 'Features', { required: false }) || null,
     price,
-    compareAtPrice: b.compareAtPrice ? int(b.compareAtPrice, 'Compare-at price', { min: 1 }) : null,
+    compareAtPrice: null, // retired: the original price plus a discount now covers it
     ...readDiscount(b, price),
     isNew: Boolean(b.isNew),
     isActive: b.isActive === undefined ? true : Boolean(b.isActive),
@@ -265,7 +265,7 @@ exports.updateProduct = wrap(async (req, res) => {
   const product = await Product.findByPk(req.params.id, { include: productInclude });
   if (!product) return res.status(404).json({ message: 'Product not found.' });
   // Fields left out of the request keep their current value.
-  const data = readProduct({ ...serialize(product), price: product.price, compareAtPrice: product.compareAtPrice, ...req.body });
+  const data = readProduct({ ...serialize(product), price: product.price, ...req.body });
   const clash = await Product.findOne({ where: { slug: data.slug, id: { [Op.ne]: product.id } } });
   if (clash) throw bad('Another product already uses that name.', 'name');
   const variants = req.body.variants ? readVariants({ variants: req.body.variants }, data.slug) : null;

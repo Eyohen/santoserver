@@ -18,9 +18,8 @@ function serialize(p) {
     basePrice: p.price,
     discountType: p.discountType || null,
     discountValue: p.discountValue || null,
-    listCompareAtPrice: p.compareAtPrice,
     // When discounted, the original price is what gets struck through.
-    compareAtPrice: currentPrice(p) < p.price ? p.price : p.compareAtPrice,
+    compareAtPrice: currentPrice(p) < p.price ? p.price : null,
     category: p.categoryRef?.slug ?? null,
     description: p.description,
     fabrics: p.fabrics,
