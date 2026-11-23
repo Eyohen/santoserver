@@ -5,4 +5,5 @@ module.exports = (sequelize, DataTypes) => sequelize.define('CustomDesign', {
   previewUrl: { type: DataTypes.STRING(500), allowNull: false },
   artworkUrl: { type: DataTypes.STRING(500), allowNull: false },
   model: { type: DataTypes.STRING(10), allowNull: false, defaultValue: 'man' },
+  printSize: { type: DataTypes.STRING(4), allowNull: false, defaultValue: 'A3' }, // A4 | A3 | A2
 });

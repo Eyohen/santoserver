@@ -105,7 +105,7 @@ async function priceCart({ items, state, discountCode }) {
       if (!d) throw httpError(400, 'A custom design in your bag is no longer available. Please design it again.');
       lines.push({
         sku: `CUSTOM-${id.slice(0, 8).toUpperCase()}-${size}`,
-        productName: 'Custom T-shirt',
+        productName: `Custom T-shirt (${d.printSize || 'A3'} print)`,
         productSlug: null,
         color: 'Black',
         size,

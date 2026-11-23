@@ -34,14 +34,16 @@ exports.createCustomRequest = wrap(async (req, res) => {
 });
 
 const isPng = (f) => f && f.mimetype === 'image/png' && f.buffer.subarray(0, 4).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+const isJpeg = (f) => f && f.mimetype === 'image/jpeg' && f.buffer.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff]));
 
 /** Stores a customer's t-shirt design: the mockup they saw and the transparent print artwork. */
 exports.createDesign = wrap(async (req, res) => {
   const preview = req.files?.preview?.[0];
   const artwork = req.files?.artwork?.[0];
-  if (!isPng(preview) || !isPng(artwork)) throw bad('Your design could not be saved. Please try again.');
+  if (!(isPng(preview) || isJpeg(preview)) || !isPng(artwork)) throw bad('Your design could not be saved. Please try again.');
   const model = req.body.model === 'woman' ? 'woman' : 'man';
   const [previewUrl, artworkUrl] = await Promise.all([saveImage(preview), saveImage(artwork)]);
-  const design = await CustomDesign.create({ previewUrl, artworkUrl, model });
+  const printSize = ['A4', 'A3', 'A2'].includes(req.body.printSize) ? req.body.printSize : 'A3';
+  const design = await CustomDesign.create({ previewUrl, artworkUrl, model, printSize });
   res.status(201).json({ id: design.id, previewUrl, price: orders.CUSTOM_TSHIRT_PRICE });
 });

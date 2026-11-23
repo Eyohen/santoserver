@@ -33,6 +33,7 @@ async function start() {
   await db.sequelize.sync(); // creates missing tables; use `npm run seed -- --reset` to rebuild
   // sync() never alters existing tables, so add the discount columns to a database created before them.
   await db.sequelize.query('ALTER TABLE "Products" ADD COLUMN IF NOT EXISTS "discountType" VARCHAR(10), ADD COLUMN IF NOT EXISTS "discountValue" INTEGER');
+  await db.sequelize.query('ALTER TABLE "CustomDesigns" ADD COLUMN IF NOT EXISTS "printSize" VARCHAR(4) NOT NULL DEFAULT \'A3\'');
   await db.sequelize.query('ALTER TABLE "OrderItems" ADD COLUMN IF NOT EXISTS "designId" UUID, ADD COLUMN IF NOT EXISTS "artworkUrl" VARCHAR(500)');
   // Discounts once stored as "naira off" ('amount') are now "discounted price": convert them, or clear any that can't be.
   await db.sequelize.query('UPDATE "Products" SET "discountValue" = "price" - "discountValue", "discountType" = \'price\' WHERE "discountType" = \'amount\' AND "discountValue" > 0 AND "discountValue" < "price"');
